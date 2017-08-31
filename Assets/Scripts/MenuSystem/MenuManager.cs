@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 
@@ -18,7 +20,7 @@ public class MenuManager : MonoBehaviour
     {
         Instance = this;
 
-		MainMenu.Show();
+		MainMenu.Show(); 
     }
 
     private void OnDestroy()
@@ -33,28 +35,36 @@ public class MenuManager : MonoBehaviour
 		Instantiate(prefab, transform);
 	}
 
-	public void OpenMenu(Menu instance)
+	public void OpenMenu(Menu instance, float animInTime)
     {
-        // De-activate top menu
         if (menuStack.Count > 0)
         {
-			if (instance.DisableMenusUnderneath)
-			{
-				foreach (var menu in menuStack)
-				{
-					menu.gameObject.SetActive(false);
-
-					if (menu.DisableMenusUnderneath)
-						break;
-				}
-			}
-
             var topCanvas = instance.GetComponent<Canvas>();
             var previousCanvas = menuStack.Peek().GetComponent<Canvas>();
-			topCanvas.sortingOrder = previousCanvas.sortingOrder + 1;
+            topCanvas.sortingOrder = previousCanvas.sortingOrder + 1;
         }
-
         menuStack.Push(instance);
+        StartCoroutine(DeactivateMenusUnder(instance, animInTime));
+    }
+
+    private IEnumerator DeactivateMenusUnder(Menu instance, float waitTime)
+    {
+        yield return new WaitForSeconds(waitTime);
+
+        //De-activate previous top menu
+        if (instance.DisableMenusUnderneath)
+        {
+            foreach (var menu in menuStack)
+            {
+                if (menu == instance)
+                    continue;
+
+                menu.gameObject.SetActive(false);
+
+                if (menu.DisableMenusUnderneath)
+                    break;
+            }
+        }
     }
 
     private T GetPrefab<T>() where T : Menu
@@ -74,41 +84,50 @@ public class MenuManager : MonoBehaviour
         throw new MissingReferenceException("Prefab not found for type " + typeof(T));
     }
 	
-	public void CloseMenu(Menu menu)
-	{
-		if (menuStack.Count == 0)
-		{
-			Debug.LogErrorFormat(menu, "{0} cannot be closed because menu stack is empty", menu.GetType());
-			return;
-		}
-
-		if (menuStack.Peek() != menu)
-		{
-			Debug.LogErrorFormat(menu, "{0} cannot be closed because it is not on top of stack", menu.GetType());
-			return;
-		}
-
-		CloseTopMenu();
-	}
-
-	public void CloseTopMenu()
+	public void CloseMenu(Menu topMenu, float animOutTime)
     {
-        var instance = menuStack.Pop();
+        if (menuStack.Count == 0)
+        {
+            Debug.LogErrorFormat(topMenu, "{0} cannot be closed because menu stack is empty", topMenu.GetType());
+            return;
+        }
 
-		if (instance.DestroyWhenClosed)
-        	Destroy(instance.gameObject);
-		else
-			instance.gameObject.SetActive(false);
+        if (menuStack.Peek() != topMenu)
+        {
+            Debug.LogErrorFormat(topMenu, "{0} cannot be closed because it is not on top of stack", topMenu.GetType());
+            return;
+        }
 
-        // Re-activate top menu
-		// If a re-activated menu is an overlay we need to activate the menu under it
-		foreach (var menu in menuStack)
-		{
+        menuStack.Pop();
+
+        StartCoroutine(CloseTopMenu(topMenu, animOutTime));
+
+        ReactivateOldMenu();
+    }
+
+    private IEnumerator CloseTopMenu(Menu instance, float waitTime)
+    {
+        yield return new WaitForSeconds(waitTime);
+
+        if (instance == null)
+            yield break;
+
+        if (instance.DestroyWhenClosed)
+            Destroy(instance.gameObject);
+        else
+            instance.gameObject.SetActive(false);
+    }
+
+    private void ReactivateOldMenu()
+    {
+        // If a re-activated menu is an overlay we need to activate the menu under it
+        foreach (var menu in menuStack)
+        {
             menu.gameObject.SetActive(true);
 
-			if (menu.DisableMenusUnderneath)
-				break;
-		}
+            if (menu.DisableMenusUnderneath)
+                break;
+        }
     }
 
     private void Update()

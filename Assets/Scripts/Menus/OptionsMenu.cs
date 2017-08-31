@@ -1,6 +1,6 @@
 ﻿using UnityEngine.UI;
 
-public class OptionsMenu : SimpleMenu<OptionsMenu>
+public class OptionsMenu : SimpleMenuScaleInOut<OptionsMenu>
 {
 	public Slider Slider;
 
